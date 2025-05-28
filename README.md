@@ -1,4 +1,4 @@
-# Agentic AI Call Summary System
+# Agentic AI STT Summary System
 
 This project showcases a **local agentic AI pipeline** that transcribes an audio file, summarizes the content, analyzes sentiment, generates a customer note, and evaluates the output using OpenAI's Whisper and GPT-4o.
 
