@@ -124,3 +124,128 @@ async def main():
 # Run the async function
 await main()
 
+# === 6. Note Writer Agent ===
+async def note_writer_agent_async(summary: str, sentiment: str) -> str:
+    """Generate a professional customer service note"""
+    prompt = f"""Based on the following information, create a professional customer service note 
+    that would be suitable for a CRM system. Include the key points, actions taken, and next steps:
+    
+    Summary: {summary}
+    
+    Sentiment Analysis: {sentiment}
+    
+    Format the note in a clear, professional manner suitable for other agents to reference."""
+    
+    try:
+        response = await note_llm.ainvoke(prompt)
+        return response.content
+    except Exception as e:
+        return f"Error generating note: {str(e)}"
+
+async def note_writer_agent(state) -> Annotated[dict, "note"]:
+    """Wrapper for note writer agent"""
+    summary = state["summary"]
+    sentiment = state["sentiment"]
+    note = await note_writer_agent_async(summary, sentiment)
+    return {"note": note}
+
+# === 7. Complete Pipeline ===
+async def complete_analysis():
+    """Run complete analysis and generate final note"""
+    
+    # 1. Get clean text (already done above)
+    clean_text_result = preprocess_agent(script)
+    clean_text = clean_text_result["clean_text"]
+    
+    # 2. Generate summary and sentiment in parallel
+    summary_task = summary_agent_async(clean_text)
+    sentiment_task = sentiment_agent_async(clean_text)
+    
+    # Run both tasks concurrently
+    summary, sentiment = await asyncio.gather(summary_task, sentiment_task)
+    
+    # 3. Create state for note generation
+    state = {
+        "clean_text": clean_text,
+        "summary": summary,
+        "sentiment": sentiment
+    }
+    
+    # 4. Generate note
+    note_result = await note_writer_agent(state)
+    note = note_result["note"]
+    
+    # 5. Output all results
+    print("="*60)
+    print("CUSTOMER SERVICE ANALYSIS RESULTS")
+    print("="*60)
+    
+    print("\n📋 CLEAN TEXT:")
+    print("-" * 30)
+    print(clean_text[:500] + "..." if len(clean_text) > 500 else clean_text)
+    
+    print("\n📝 SUMMARY:")
+    print("-" * 30)
+    print(summary)
+    
+    print("\n😊 SENTIMENT ANALYSIS:")
+    print("-" * 30)
+    print(sentiment)
+    
+    print("\n📄 CUSTOMER SERVICE NOTE:")
+    print("-" * 30)
+    print(note)
+    
+    return {
+        "clean_text": clean_text,
+        "summary": summary,
+        "sentiment": sentiment,
+        "note": note
+    }
+
+# === 8. Run Complete Analysis ===
+# Execute the complete pipeline
+result = await complete_analysis()
+
+# === Alternative: Step by Step Execution ===
+async def step_by_step_execution():
+    """Step by step execution if you want to see each step"""
+    
+    print("Step 1: Preprocessing...")
+    clean_text_result = preprocess_agent(script)
+    clean_text = clean_text_result["clean_text"]
+    print("✅ Clean text generated")
+    
+    print("\nStep 2: Generating summary...")
+    summary = await summary_agent_async(clean_text)
+    print("✅ Summary generated")
+    
+    print("\nStep 3: Analyzing sentiment...")
+    sentiment = await sentiment_agent_async(clean_text)
+    print("✅ Sentiment analyzed")
+    
+    print("\nStep 4: Creating customer service note...")
+    note = await note_writer_agent_async(summary, sentiment)
+    print("✅ Note generated")
+    
+    print("\n" + "="*60)
+    print("FINAL CUSTOMER SERVICE NOTE")
+    print("="*60)
+    print(note)
+    
+    return note
+
+# Uncomment below to run step by step
+# final_note = await step_by_step_execution()
+
+# === 9. Quick Note Generation (if you already have summary and sentiment) ===
+async def quick_note_generation(summary_text, sentiment_text):
+    """Quick function to generate note if you already have summary and sentiment"""
+    note = await note_writer_agent_async(summary_text, sentiment_text)
+    print("📄 CUSTOMER SERVICE NOTE:")
+    print("-" * 40)
+    print(note)
+    return note
+
+# Example usage if you want to use previously generated summary and sentiment:
+# note_result = await quick_note_generation("your_summary_here", "your_sentiment_here")
