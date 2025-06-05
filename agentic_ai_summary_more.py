@@ -148,6 +148,24 @@ async def note_writer_agent(state) -> Annotated[dict, "note"]:
     sentiment = state["sentiment"]
     note = await note_writer_agent_async(summary, sentiment)
     return {"note": note}
+# Generate the note using the summary and sentiment
+async def main():
+    # 먼저 summary와 sentiment를 가져와야 합니다
+    summary_output = await summary_agent(clean_text)
+    sentiment_output = await sentiment_agent(clean_text)
+    
+    # state 생성
+    state = {
+        "summary": summary_output["summary"],
+        "sentiment": sentiment_output["sentiment"]
+    }
+    
+    # note 생성
+    note_output = await note_writer_agent(state)
+    print(note_output)
+
+# Run the async function
+await main()
 
 # === 7. Complete Pipeline ===
 async def complete_analysis():
