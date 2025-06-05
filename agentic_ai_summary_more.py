@@ -6,6 +6,135 @@ from langgraph.graph import StateGraph
 from langchain.runnables import RunnableLambda
 from langchain_openai import AzureChatOpenAI
 
+# === Sample JSON Script Data ===
+script = {
+  "call_id": "CALL_2024_001",
+  "timestamp": "2024-06-04T10:30:00Z",
+  "duration": "00:08:45",
+  "participants": {
+    "agent": {
+      "name": "Sarah Johnson",
+      "id": "AGENT_001",
+      "department": "Customer Service"
+    },
+    "customer": {
+      "name": "John Smith",
+      "id": "CUST_789456",
+      "phone": "+1-555-0123"
+    }
+  },
+  "transcript": [
+    {
+      "speaker": "agent",
+      "timestamp": "00:00:05",
+      "text": "Good morning, thank you for calling TechSupport Solutions. This is Sarah, how can I help you today?"
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:00:12",
+      "text": "Hi Sarah, um, I'm having a really frustrating issue with my internet connection. It's been going on for like three days now and, you know, I work from home so this is really affecting my productivity."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:00:28",
+      "text": "I'm sorry to hear about the internet issues you're experiencing. I completely understand how frustrating that must be, especially when you're working from home. Let me help you get this resolved today."
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:00:42",
+      "text": "Thank you, I really appreciate that. So basically, uh, the connection keeps dropping every few hours and sometimes it's really slow. Like, you know, pages take forever to load."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:00:58",
+      "text": "I see. Can you tell me what type of internet plan you have with us and what equipment you're using? Also, are you experiencing this issue on all devices or just specific ones?"
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:01:12",
+      "text": "Um, I have the premium plan, the 100 megabit one. I'm using the router you guys provided last year. And yeah, it's happening on my laptop, my phone, everything that connects to the wifi."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:01:28",
+      "text": "Thank you for that information. Let me check your account and run some diagnostics on your connection. I can see here that there have been some intermittent connectivity issues reported in your area."
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:01:42",
+      "text": "Oh really? So it's not just me? That's actually, you know, kind of a relief to hear."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:01:50",
+      "text": "Yes, we've had a few reports from your neighborhood. Our technical team has been working on resolving the infrastructure issue. However, I'd also like to troubleshoot your specific setup to make sure everything is optimized on your end."
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:02:08",
+      "text": "Okay, that sounds good. What do you need me to do?"
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:02:12",
+      "text": "First, let's try restarting your router. Can you unplug it for about 30 seconds and then plug it back in? I'll stay on the line with you."
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:02:22",
+      "text": "Sure, let me do that now. Okay, I'm unplugging it... and now I'm plugging it back in. The lights are coming back on."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:02:45",
+      "text": "Perfect. Now let's wait for all the lights to stabilize. While we're waiting, I'm going to schedule a technician visit for tomorrow to check the line quality and make sure there are no issues with the connection to your home."
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:03:02",
+      "text": "Oh wow, that's great service. I wasn't expecting you to send someone out so quickly. Thank you so much, Sarah."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:03:12",
+      "text": "You're very welcome! I want to make sure we get this completely resolved for you. The technician will be there between 9 AM and 12 PM tomorrow. Is that time frame okay for you?"
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:03:24",
+      "text": "Yes, that works perfectly. I'll be working from home anyway. Um, is there anything else I should try in the meantime?"
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:03:34",
+      "text": "The restart should help for now. If you continue to experience issues, try moving closer to the router or using an ethernet cable for your most important work tasks. I'm also applying a service credit to your account for the inconvenience."
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:03:52",
+      "text": "Oh, you don't have to do that, but I really appreciate it. This has been such a positive experience. You've been so helpful and patient with me."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:04:05",
+      "text": "I'm so glad I could help! Is there anything else I can assist you with today?"
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:04:12",
+      "text": "No, I think that covers everything. Thank you again, Sarah. You've made my day so much better."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:04:20",
+      "text": "You're very welcome, John. Have a great day, and don't hesitate to call if you need any further assistance!"
+    }
+  ],
+  "resolution": "Technician scheduled, service credit applied, temporary troubleshooting provided",
+  "customer_satisfaction": "High",
+  "tags": ["internet_issues", "technical_support", "positive_resolution", "technician_scheduled"]
+}
+
 # === Azure OpenAI Configuration ===
 COMPLETION_TOKENS = 1000
 
@@ -43,7 +172,7 @@ evaluation_llm = AzureChatOpenAI(
 
 # === 1. State Definition ===
 class State(TypedDict):
-    json_path: str
+    script_data: dict
     transcript: str
     clean_text: str
     summary: str
@@ -51,18 +180,15 @@ class State(TypedDict):
     note: str
     evaluation: str
 
-# === 2. JSON Reader Agent ===
-def json_reader_agent(state) -> Annotated[dict, "transcript"]:
-    """Reads JSON file and extracts transcript text"""
-    json_path = state["json_path"]
+# === 2. Script Parser Agent ===
+def script_parser_agent(state) -> Annotated[dict, "transcript"]:
+    """Parse script data and extract transcript text"""
+    script_data = state["script_data"]
     
     try:
-        with open(json_path, 'r', encoding='utf-8') as file:
-            data = json.load(file)
-        
-        # Extract transcript text from JSON structure
+        # Extract transcript text from script structure
         transcript_parts = []
-        for entry in data["transcript"]:
+        for entry in script_data["transcript"]:
             speaker = entry["speaker"]
             text = entry["text"]
             transcript_parts.append(f"{speaker.capitalize()}: {text}")
@@ -72,12 +198,10 @@ def json_reader_agent(state) -> Annotated[dict, "transcript"]:
         
         return {"transcript": full_transcript}
     
-    except FileNotFoundError:
-        return {"transcript": "Error: JSON file not found"}
     except KeyError as e:
-        return {"transcript": f"Error: Missing key in JSON structure: {e}"}
+        return {"transcript": f"Error: Missing key in script structure: {e}"}
     except Exception as e:
-        return {"transcript": f"Error reading JSON file: {e}"}
+        return {"transcript": f"Error parsing script data: {e}"}
 
 # === 3. Preprocessing Agent ===
 def preprocess_agent(state) -> Annotated[dict, "clean_text"]:
@@ -209,26 +333,26 @@ def evaluation_agent(state) -> Annotated[dict, "evaluation"]:
 builder = StateGraph(State)
 
 # Add nodes
-builder.add_node("JSONReader", RunnableLambda(json_reader_agent))
+builder.add_node("ScriptParser", RunnableLambda(script_parser_agent))
 builder.add_node("Preprocess", RunnableLambda(preprocess_agent))
 builder.add_node("ParallelSummarySentiment", RunnableLambda(parallel_summary_sentiment_agent))
 builder.add_node("NoteWriter", RunnableLambda(note_writer_agent))
 builder.add_node("Evaluation", RunnableLambda(evaluation_agent))
 
 # Define the workflow
-builder.set_entry_point("JSONReader")
-builder.add_edge("JSONReader", "Preprocess")
+builder.set_entry_point("ScriptParser")
+builder.add_edge("ScriptParser", "Preprocess")
 builder.add_edge("Preprocess", "ParallelSummarySentiment")
 builder.add_edge("ParallelSummarySentiment", "NoteWriter")
 builder.add_edge("NoteWriter", "Evaluation")
 builder.set_finish_point("Evaluation")
 
 # === 10. Execute Graph ===
-def run_customer_service_analysis(json_file_path):
+def run_customer_service_analysis(script_data):
     """Run the complete customer service analysis pipeline"""
     graph = builder.compile()
     
-    initial_state = {"json_path": json_file_path}
+    initial_state = {"script_data": script_data}
     output = graph.invoke(initial_state)
     
     return output
@@ -239,7 +363,7 @@ def create_parallel_graph():
     builder_parallel = StateGraph(State)
     
     # Add all nodes
-    builder_parallel.add_node("JSONReader", RunnableLambda(json_reader_agent))
+    builder_parallel.add_node("ScriptParser", RunnableLambda(script_parser_agent))
     builder_parallel.add_node("Preprocess", RunnableLambda(preprocess_agent))
     builder_parallel.add_node("Summary", RunnableLambda(summary_agent))
     builder_parallel.add_node("Sentiment", RunnableLambda(sentiment_agent))
@@ -247,8 +371,8 @@ def create_parallel_graph():
     builder_parallel.add_node("Evaluation", RunnableLambda(evaluation_agent))
     
     # Define the workflow with parallel branches
-    builder_parallel.set_entry_point("JSONReader")
-    builder_parallel.add_edge("JSONReader", "Preprocess")
+    builder_parallel.set_entry_point("ScriptParser")
+    builder_parallel.add_edge("ScriptParser", "Preprocess")
     
     # Create parallel branches after preprocessing
     builder_parallel.add_edge("Preprocess", "Summary")
@@ -263,7 +387,7 @@ def create_parallel_graph():
     
     return builder_parallel.compile()
 
-def run_parallel_analysis(json_file_path, use_separate_branches=False):
+def run_parallel_analysis(script_data, use_separate_branches=False):
     """Run analysis with option for parallel processing"""
     if use_separate_branches:
         graph = create_parallel_graph()
@@ -272,7 +396,7 @@ def run_parallel_analysis(json_file_path, use_separate_branches=False):
         graph = builder.compile()
         print("Using async parallel processing within single agent...")
     
-    initial_state = {"json_path": json_file_path}
+    initial_state = {"script_data": script_data}
     output = graph.invoke(initial_state)
     
     return output
@@ -280,7 +404,7 @@ def run_parallel_analysis(json_file_path, use_separate_branches=False):
 # === Performance Comparison Function ===
 import time
 
-def compare_performance(json_file_path):
+def compare_performance(script_data):
     """Compare performance between sequential and parallel processing"""
     print("="*60)
     print("PERFORMANCE COMPARISON")
@@ -288,12 +412,12 @@ def compare_performance(json_file_path):
     
     # Test parallel async processing
     start_time = time.time()
-    result_parallel = run_parallel_analysis(json_file_path, use_separate_branches=False)
+    result_parallel = run_parallel_analysis(script_data, use_separate_branches=False)
     parallel_time = time.time() - start_time
     
     # Test separate branch processing
     start_time = time.time()
-    result_branches = run_parallel_analysis(json_file_path, use_separate_branches=True)
+    result_branches = run_parallel_analysis(script_data, use_separate_branches=True)
     branches_time = time.time() - start_time
     
     print(f"\n⏱️  Async Parallel Processing Time: {parallel_time:.2f} seconds")
@@ -309,12 +433,9 @@ if __name__ == "__main__":
         print("Error: Please set the GPT4o_DEPLOYMENT_NAME environment variable")
         exit(1)
     
-    # Path to your JSON transcript file
-    json_file_path = "customer_transcript.json"
-    
     try:
-        # Run the analysis
-        result = run_customer_service_analysis(json_file_path)
+        # Run the analysis using the script variable
+        result = run_customer_service_analysis(script)
         
         # Output results
         print("="*50)
@@ -349,25 +470,22 @@ if __name__ == "__main__":
         print("\n" + "="*50)
         print("PERFORMANCE ANALYSIS")
         print("="*50)
-        compare_performance(json_file_path)
+        compare_performance(script)
         
     except Exception as e:
         print(f"Error running analysis: {e}")
 
 # === 12. Additional Utility Functions ===
-def load_transcript_metadata(json_file_path):
-    """Load additional metadata from the JSON file"""
+def load_script_metadata(script_data):
+    """Load additional metadata from the script data"""
     try:
-        with open(json_file_path, 'r', encoding='utf-8') as file:
-            data = json.load(file)
-        
         metadata = {
-            "call_id": data.get("call_id", "N/A"),
-            "duration": data.get("duration", "N/A"),
-            "agent_name": data.get("participants", {}).get("agent", {}).get("name", "N/A"),
-            "customer_name": data.get("participants", {}).get("customer", {}).get("name", "N/A"),
-            "resolution": data.get("resolution", "N/A"),
-            "tags": data.get("tags", [])
+            "call_id": script_data.get("call_id", "N/A"),
+            "duration": script_data.get("duration", "N/A"),
+            "agent_name": script_data.get("participants", {}).get("agent", {}).get("name", "N/A"),
+            "customer_name": script_data.get("participants", {}).get("customer", {}).get("name", "N/A"),
+            "resolution": script_data.get("resolution", "N/A"),
+            "tags": script_data.get("tags", [])
         }
         
         return metadata
@@ -385,21 +503,18 @@ def save_analysis_results(results, output_file_path):
         print(f"Error saving results: {e}")
 
 # === Advanced Usage Examples ===
-def batch_process_transcripts(transcript_folder_path):
-    """Process multiple transcript files in a folder"""
-    import glob
-    
-    json_files = glob.glob(f"{transcript_folder_path}/*.json")
+def process_multiple_scripts(scripts_list):
+    """Process multiple script objects"""
     results = []
     
-    for json_file in json_files:
-        print(f"Processing: {json_file}")
+    for i, script_data in enumerate(scripts_list):
+        print(f"Processing script {i+1}/{len(scripts_list)}")
         try:
-            result = run_customer_service_analysis(json_file)
-            result["file_name"] = json_file
+            result = run_customer_service_analysis(script_data)
+            result["script_index"] = i
             results.append(result)
         except Exception as e:
-            print(f"Error processing {json_file}: {e}")
+            print(f"Error processing script {i}: {e}")
     
     return results
 
@@ -411,7 +526,7 @@ def create_summary_report(results_list):
     report_prompt = f"""Create a comprehensive summary report based on the following customer service analysis results:
     
     {json.dumps([{
-        'file': r.get('file_name', 'unknown'),
+        'script_index': r.get('script_index', 'unknown'),
         'summary': r.get('summary', ''),
         'sentiment': r.get('sentiment', '')
     } for r in results_list], indent=2)}
@@ -428,3 +543,28 @@ def create_summary_report(results_list):
         return response.content
     except Exception as e:
         return f"Error creating summary report: {str(e)}"
+
+# === Direct Processing Function (Alternative Usage) ===
+def process_script_directly(script_data):
+    """Process script data directly without using the graph (for testing)"""
+    try:
+        # Parse script
+        parser_result = script_parser_agent({"script_data": script_data})
+        
+        # Preprocess
+        preprocess_result = preprocess_agent(parser_result)
+        
+        # Get clean text
+        clean_text = preprocess_result["clean_text"]
+        
+        # Run parallel analysis
+        summary, sentiment = asyncio.run(parallel_summary_sentiment_async(clean_text))
+        
+        return {
+            "transcript": parser_result["transcript"],
+            "clean_text": clean_text,
+            "summary": summary,
+            "sentiment": sentiment
+        }
+    except Exception as e:
+        return {"error": str(e)}
